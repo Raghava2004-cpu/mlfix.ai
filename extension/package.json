@@ -1,0 +1,95 @@
+{
+  "name": "mlfix",
+  "displayName": "mlfix - AI ML code fixer",
+  "description": "Multi-agent AI pipeline that fixes Python and ML code, with reinforcement learning and optional cloud sync.",
+  "version": "0.1.0",
+  "publisher": "Raghava2004-cpu",
+  "icon": "media/icon.png",
+  "categories": ["Machine Learning", "Programming Languages", "Other"],
+  "keywords": ["ai", "ml", "python", "pytorch", "debugger", "gemini", "code fix"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourname/mlfix"
+  },
+  "bugs": {
+    "url": "https://github.com/yourname/mlfix/issues"
+  },
+  "engines": { "vscode": "^1.85.0" },
+  
+  "scripts": {
+    "compile": "npm run check-types && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "check-types": "tsc --noEmit --project tsconfig.json",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "mlfix.syncBackend", "title": "mlfix: Sync with Backend" },
+      { "command": "mlfix.fixFromTerminal", "title": "mlfix: Fix From Terminal Selection" },
+      { "command": "mlfix.resetWelcome", "title": "mlfix: Reset Welcome Message" },
+      { "command": "mlfix.showMenu", "title": "mlfix: Show Menu" },
+      { "command": "mlfix.showBandit", "title": "mlfix: Show Bandit Stats" },
+      { "command": "mlfix.showLogs", "title": "mlfix: Show Logs" },
+      {
+        "command": "mlfix.showUsage",
+        "title": "mlfix: Show Today's Usage"
+      },
+      {
+        "command": "mlfix.fixSelection",
+        "title": "mlfix: Fix Selected Code"
+      },
+      {
+        "command": "mlfix.checkDaemon",
+        "title": "mlfix: Check Daemon Status"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "mlfix.fixSelection",
+        "key": "ctrl+alt+f",
+        "mac": "cmd+alt+f",
+        "when": "editorTextFocus"
+      },
+      {
+       "command": "mlfix.fixFromTerminal",
+       "key": "ctrl+alt+t",
+       "mac": "cmd+alt+t"
+         }
+    ],
+    "configuration": {
+      "title": "mlfix",
+      "properties": {
+        "mlfix.daemonPort": {
+          "type": "number",
+          "default": 8765,
+          "description": "Port the local daemon listens on"
+        },
+        "mlfix.backendEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send anonymized episode data to the mlfix backend for cross-user learning. Set to false to run fully offline."
+        },
+        "mlfix.daemonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to daemon project (uv run mlfix-daemon runs here). Leave empty to auto-detect."
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^26.1.0",
+    "@types/vscode": "^1.125.0",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "esbuild": "^0.28.1"
+  }
+}

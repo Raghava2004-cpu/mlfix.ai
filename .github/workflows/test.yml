@@ -1,0 +1,42 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  daemon-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Add uv to PATH
+        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        working-directory: daemon
+        run: uv sync
+      - name: Run tests
+        working-directory: daemon
+        env:
+          GEMINI_API_KEY: dummy-for-tests-doesnt-call-api
+        run: uv run pytest -v
+
+  extension-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install deps
+        working-directory: extension
+        run: npm install
+      - name: TypeScript compile
+        working-directory: extension
+        run: npm run compile || npx tsc --noEmit

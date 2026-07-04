@@ -1,0 +1,34 @@
+[project]
+name = "mlfix"
+version = "0.1.0"
+description = "MLFix daemon service for code fix requests"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "google-genai",
+    "python-dotenv",
+    "tenacity",
+    "lancedb>=0.34.0",
+    "sentence-transformers>=5.6.0",
+    "numpy>=2.4.6",
+    "httpx>=0.28.1",
+]
+
+[project.scripts]
+mlfix-daemon = "mlfix.__main__:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+]
+
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
