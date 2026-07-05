@@ -1,3 +1,4 @@
+<img width="1254" height="1254" alt="ChatGPT Image Jul 5, 2026, 07_59_10 PM" src="https://github.com/user-attachments/assets/ab3368ea-2106-4b7e-9ae3-87453e8f3be2" />
 <div align="center">
 
 <img src="https://raw.githubusercontent.com/Raghava2004-cpu/mlfix.ai/main/extension/media/icon.png" alt="mlfix logo" width="120" />
