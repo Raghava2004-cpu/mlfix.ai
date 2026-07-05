@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
+import * as fs from 'fs';
 
 let daemonProcess: ChildProcess | undefined;
 let output: vscode.OutputChannel;
@@ -36,6 +37,21 @@ function getConfig() {
 
 function daemonUrl(port: number): string {
   return `http://127.0.0.1:${port}`;
+}
+
+function resolveDaemonPath(context: vscode.ExtensionContext, configuredPath: string): string {
+  if (configuredPath.trim()) {
+    return configuredPath.trim();
+  }
+
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    const candidate = path.join(folder.uri.fsPath, 'daemon');
+    if (fs.existsSync(path.join(candidate, 'pyproject.toml'))) {
+      return candidate;
+    }
+  }
+
+  return path.resolve(context.extensionPath, '..', 'daemon');
 }
 
 async function syncBackendCommand() {
@@ -118,10 +134,17 @@ function startHealthPolling(port: number, context: vscode.ExtensionContext) {
 
 function startDaemon(context: vscode.ExtensionContext) {
   const { port, daemonPath } = getConfig();
-  const cwd = daemonPath || path.resolve(context.extensionPath, '..', 'daemon');
+  const cwd = resolveDaemonPath(context, daemonPath);
 
   output.appendLine(`Starting daemon in: ${cwd}`);
   output.appendLine(`Expected port: ${port}`);
+
+  if (!fs.existsSync(cwd)) {
+    output.appendLine(`Daemon path does not exist: ${cwd}`);
+    output.appendLine('Set mlfix.daemonPath to the daemon folder, for example D:\\mlfix\\daemon.');
+    vscode.window.showWarningMessage('mlfix: daemon path not found. Set mlfix.daemonPath to D:\\mlfix\\daemon.');
+    return;
+  }
 
   daemonProcess = spawn('uv', ['run', 'mlfix-daemon'], {
     cwd,

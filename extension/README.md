@@ -17,6 +17,28 @@ You see a diff. Accept or reject. The system learns from your choice.
 
 ## Getting started
 
+## Setup
+
+mlfix has two parts: this extension (which runs in VS Code) and a local Python daemon (which does the AI work).
+
+### One-time daemon setup
+
+```bash
+git clone https://github.com/yourname/mlfix.git
+cd mlfix/daemon
+uv sync
+cp .env.example .env
+# Edit .env and paste your GEMINI_API_KEY
+```
+
+### Point the extension at the daemon
+
+Open VS Code settings and set:
+
+- `mlfix.daemonPath`: absolute path to the `daemon` folder (e.g. `C:\Users\you\code\mlfix\daemon`)
+
+Reload VS Code. The status bar will show `✓ mlfix` when ready.
+
 1. Install the extension.
 2. Get a free API key at [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey).
 3. Set it in `daemon/.env` (the welcome dialog will guide you).

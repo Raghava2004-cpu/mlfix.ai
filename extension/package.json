@@ -5,8 +5,24 @@
   "version": "0.1.0",
   "publisher": "Raghava2004-cpu",
   "icon": "media/icon.png",
-  "categories": ["Machine Learning", "Programming Languages", "Other"],
-  "keywords": ["ai", "ml", "python", "pytorch", "debugger", "gemini", "code fix"],
+  "main": "./dist/extension.js",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "ml",
+    "python",
+    "pytorch",
+    "debugger",
+    "gemini",
+    "code fix"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/yourname/mlfix"
@@ -14,8 +30,7 @@
   "bugs": {
     "url": "https://github.com/yourname/mlfix/issues"
   },
-  "engines": { "vscode": "^1.85.0" },
-  
+  "license": "MIT",
   "scripts": {
     "compile": "npm run check-types && node esbuild.js",
     "watch": "npm-run-all -p watch:*",
@@ -30,12 +45,30 @@
   ],
   "contributes": {
     "commands": [
-      { "command": "mlfix.syncBackend", "title": "mlfix: Sync with Backend" },
-      { "command": "mlfix.fixFromTerminal", "title": "mlfix: Fix From Terminal Selection" },
-      { "command": "mlfix.resetWelcome", "title": "mlfix: Reset Welcome Message" },
-      { "command": "mlfix.showMenu", "title": "mlfix: Show Menu" },
-      { "command": "mlfix.showBandit", "title": "mlfix: Show Bandit Stats" },
-      { "command": "mlfix.showLogs", "title": "mlfix: Show Logs" },
+      {
+        "command": "mlfix.syncBackend",
+        "title": "mlfix: Sync with Backend"
+      },
+      {
+        "command": "mlfix.fixFromTerminal",
+        "title": "mlfix: Fix From Terminal Selection"
+      },
+      {
+        "command": "mlfix.resetWelcome",
+        "title": "mlfix: Reset Welcome Message"
+      },
+      {
+        "command": "mlfix.showMenu",
+        "title": "mlfix: Show Menu"
+      },
+      {
+        "command": "mlfix.showBandit",
+        "title": "mlfix: Show Bandit Stats"
+      },
+      {
+        "command": "mlfix.showLogs",
+        "title": "mlfix: Show Logs"
+      },
       {
         "command": "mlfix.showUsage",
         "title": "mlfix: Show Today's Usage"
@@ -57,10 +90,10 @@
         "when": "editorTextFocus"
       },
       {
-       "command": "mlfix.fixFromTerminal",
-       "key": "ctrl+alt+t",
-       "mac": "cmd+alt+t"
-         }
+        "command": "mlfix.fixFromTerminal",
+        "key": "ctrl+alt+t",
+        "mac": "cmd+alt+t"
+      }
     ],
     "configuration": {
       "title": "mlfix",
@@ -86,7 +119,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "^26.1.0",
-    "@types/vscode": "^1.125.0",
+    "@types/vscode": "1.85.0",
     "typescript": "^6.0.3"
   },
   "dependencies": {

@@ -20,12 +20,12 @@ jobs:
           python-version: "3.11"
       - name: Install deps
         working-directory: daemon
-        run: uv sync
+        run: uv sync --extra dev
       - name: Run tests
         working-directory: daemon
         env:
           GEMINI_API_KEY: dummy-for-tests-doesnt-call-api
-        run: uv run pytest -v
+        run: uv run --extra dev pytest -v
 
   extension-build:
     runs-on: ubuntu-latest
