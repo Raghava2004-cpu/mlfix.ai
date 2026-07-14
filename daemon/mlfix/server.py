@@ -41,6 +41,42 @@ _semantic: SemanticMemory | None = None
 _bandit: ThompsonBandit | None = None
 _backend: BackendClient | None = None
 
+def create_pipeline() -> tuple[
+    Pipeline,
+    BudgetManager,
+    EpisodicMemory,
+    SemanticMemory,
+    ThompsonBandit,
+    BackendClient,
+]:
+    """Build the daemon pipeline and its shared dependencies."""
+    budget = BudgetManager(DB_PATH)
+    episodic = EpisodicMemory(DB_PATH)
+    semantic = SemanticMemory(LANCE_PATH)
+    bandit = ThompsonBandit(DB_PATH)
+
+    # Backend is optional - disabled cleanly if env vars are not set.
+    backend = BackendClient()
+
+    easy = GeminiProvider(model="gemini-2.5-flash-lite")
+    medium = GeminiProvider(model="gemini-2.5-flash")
+    hard = GeminiProvider(model="gemini-2.5-flash")
+
+    router = Router(easy, medium, hard, budget=budget, bandit=bandit)
+    executor = LocalExecutor(timeout_s=8.0)
+
+    pipeline = Pipeline(
+        router=router,
+        budget=budget,
+        triage_provider=easy,
+        critic_provider=medium,
+        executor=executor,
+        episodic=episodic,
+        semantic=semantic,
+        backend=backend,
+    )
+    return pipeline, budget, episodic, semantic, bandit, backend
+
 
 async def _sync_from_backend() -> None:
     """Pull global bandit priors and merge locally. Called on startup and via /sync command."""
@@ -60,31 +96,14 @@ async def lifespan(app: FastAPI):
     global _pipeline, _budget, _episodic, _semantic, _bandit, _backend
     log.info("mlfix daemon starting")
     try:
-        _budget = BudgetManager(DB_PATH)
-        _episodic = EpisodicMemory(DB_PATH)
-        _semantic = SemanticMemory(LANCE_PATH)
-        _bandit = ThompsonBandit(DB_PATH)
-
-        # Backend is optional — disabled cleanly if env vars aren't set
-        _backend = BackendClient()
-
-        easy = GeminiProvider(model="gemini-2.5-flash-lite")
-        medium = GeminiProvider(model="gemini-2.5-flash")
-        hard = GeminiProvider(model="gemini-2.5-flash")
-
-        router = Router(easy, medium, hard, budget=_budget, bandit=_bandit)
-        executor = LocalExecutor(timeout_s=8.0)
-
-        _pipeline = Pipeline(
-            router=router,
-            budget=_budget,
-            triage_provider=easy,
-            critic_provider=medium,
-            executor=executor,
-            episodic=_episodic,
-            semantic=_semantic,
-            backend=_backend,
-        )
+        (
+            _pipeline,
+            _budget,
+            _episodic,
+            _semantic,
+            _bandit,
+            _backend,
+        ) = create_pipeline()
         log.info("Pipeline ready")
 
         # Kick off startup sync in background — don't block startup on it
@@ -102,6 +121,7 @@ class FixRequest(BaseModel):
     code: str = Field(...)
     error: str = Field(...)
     language: str = Field(default="python")
+    file_path: str | None = Field(default=None, description="Absolute path of the file being fixed, for multi-file context")
 
 
 class FixResponse(BaseModel):
@@ -202,7 +222,7 @@ async def fix(req: FixRequest) -> FixResponse:
     if _pipeline is None:
         raise HTTPException(503, "Pipeline not ready.")
     try:
-        trace, episode_id = await _pipeline.run(req.code, req.error, req.language)
+        trace, episode_id = await _pipeline.run(req.code, req.error, req.language, req.file_path)
     except RuntimeError as e:
         raise HTTPException(429, str(e)) from e
     except Exception as e:

@@ -48,10 +48,11 @@ class FixerAgent:
         language: str = "python",
         category: ErrorCategory = ErrorCategory.GENERIC,
         examples: list[dict] | None = None,
+        ast_summary: str | None = None,
     ) -> FixCandidate:
         from .specialists import build_user_prompt, system_prompt_for
         system = system_prompt_for(category)
-        user = build_user_prompt(code, error, language, examples)
+        user = build_user_prompt(code, error, language, examples, ast_summary)
 
         resp = await self.provider.complete(system, user)
 

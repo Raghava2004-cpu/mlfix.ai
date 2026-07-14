@@ -5,6 +5,8 @@ import asyncio
 import logging
 from datetime import datetime
 
+from ..analysis.repo_context import gather as gather_repo_context
+from ..analysis.ast_analyzer import analyze as ast_analyze
 from ..backend.client import BackendClient
 from ..memory.budget import BudgetManager
 from ..memory.episodic import Episode, EpisodicMemory, new_episode_id
@@ -51,7 +53,7 @@ class Pipeline:
         self.semantic = semantic
         self.backend = backend
 
-    async def run(self, code: str, error: str, language: str = "python") -> tuple[PipelineTrace, str]:
+    async def run(self,code: str,error: str,language: str = "python",file_path: str | None = None,) -> tuple[PipelineTrace, str]:
         stages: list[str] = []
         episode_id = new_episode_id()
 
@@ -73,7 +75,23 @@ class Pipeline:
             error=error, code=code, category=triage_result.category.value, k=3,
         )
         log.info("retrieved %d examples from semantic memory", len(examples))
-
+        # 2b. AST analysis — extract structure from the buggy file
+        stages.append("ast_analysis")
+        ast_result = ast_analyze(code) if language == "python" else None
+        ast_summary = ast_result.to_prompt_summary() if ast_result else None
+        if ast_result:
+            log.info("ast: syntax_valid=%s imports=%d classes=%d undefined=%d",
+                     ast_result.syntax_valid, len(ast_result.imports),
+                     len(ast_result.classes), len(ast_result.undefined_names))
+            
+        # 2c. Repo context — find and include related files
+        stages.append("repo_context")
+        repo_ctx = gather_repo_context(code, file_path) if language == "python" else None
+        repo_context_block = repo_ctx.to_prompt_block() if repo_ctx and repo_ctx.related else None
+        if repo_ctx:
+            log.info("repo_context: %d related files, ~%d tokens",
+                     len(repo_ctx.related), repo_ctx.total_tokens)
+                
         # 3. Route — bandit picks a specialist model, sticks with it across iterations
         decision = self.router.route(error, code, triage_result.category.value)
         fixer = FixerAgent(decision.provider)
@@ -95,7 +113,12 @@ class Pipeline:
             effective_error = self._build_error_with_history(error, attempt_history)
 
             stages.append(f"specialist_iter{iter_num}")
-            fix = await fixer.fix(code, effective_error, language, triage_result.category, examples)
+            # Combine AST summary and repo context into one context block
+            combined_context = "\n\n".join(filter(None, [ast_summary, repo_context_block]))
+            fix = await fixer.fix(
+                code, effective_error, language, triage_result.category, examples,
+                combined_context or None,
+            )
             self.budget.record(fix.model, fix.tokens_in, fix.tokens_out)
             total_in += fix.tokens_in
             total_out += fix.tokens_out

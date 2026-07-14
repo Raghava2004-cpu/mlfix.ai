@@ -209,14 +209,15 @@ async function runFixFlow(
     async () => {
       try {
         const r = await fetch(`${daemonUrl(port)}/fix`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
             code,
             error: errorInput,
             language: editor.document.languageId,
-          }),
-        });
+            file_path: editor.document.uri.fsPath,  // NEW — enables multi-file context
+            }),
+             });
         if (!r.ok) {
           const errText = await r.text();
           throw new Error(`daemon returned ${r.status}: ${errText}`);

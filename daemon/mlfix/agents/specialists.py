@@ -104,9 +104,14 @@ def build_user_prompt(
     error: str,
     language: str,
     examples: list[dict] | None = None,
+    ast_summary: str | None = None,
 ) -> str:
-    """Compose the user prompt with optional few-shot examples from semantic memory."""
+    """Compose the user prompt with optional few-shot examples + AST summary."""
     parts: list[str] = []
+
+    if ast_summary:
+        parts.append(ast_summary)
+        parts.append("")
 
     if examples:
         parts.append("Similar past fixes (use as reference; do NOT copy verbatim):\n")
