@@ -222,9 +222,14 @@ async function runFixFlow(
           throw new Error(`daemon returned ${r.status}: ${errText}`);
         }
         const data = await r.json() as FixResponse;
+        // Count iterations from stages_run (specialist_iter1, specialist_iter2, ...)
+        const iterationCount = data.stages_run.filter(s => s.startsWith('specialist_iter')).length;
+        const isRetry = iterationCount > 1;
+
         output.appendLine('--- pipeline trace ---');
         output.appendLine(`category:    ${data.category}`);
         output.appendLine(`examples:    ${data.examples_used} retrieved from memory`);
+        output.appendLine(`iterations:  ${iterationCount} ${isRetry ? '(RETRIES USED)' : '(single-shot)'}`);
         output.appendLine(`stages:      ${data.stages_run.join(' -> ')}`);
         output.appendLine(`model:       ${data.model_used}`);
         output.appendLine(`critic:      ${data.critic_approved ? 'approved' : 'rejected'}`);
@@ -253,10 +258,12 @@ async function runFixFlow(
           }
         }
 
+        const iterCount = data.stages_run.filter(s => s.startsWith('specialist_iter')).length;
+        const iterInfo = iterCount > 1 ? ` · attempt ${iterCount}/3` : '';
         const decision = await showDiffAndPrompt(
-          code, data.fixed_code, data.explanation, data.confidence,
-          `${data.model_used} · ${data.category}`,
-        );
+             code, data.fixed_code, data.explanation, data.confidence,
+               `${data.model_used} · ${data.category}${iterInfo}`,
+               );
 
         try {
           await fetch(`${daemonUrl(port)}/feedback`, {

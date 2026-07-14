@@ -20,8 +20,6 @@ from .types import ExecutionResult, PipelineTrace
 
 log = logging.getLogger("mlfix.pipeline")
 
-MAX_ITERATIONS = 3
-
 
 def _looks_runnable(code: str) -> bool:
     lowered = code.lower()
@@ -30,6 +28,8 @@ def _looks_runnable(code: str) -> bool:
 
 
 class Pipeline:
+    MAX_ITERATIONS = 3
+
     def __init__(
         self,
         router: Router,
@@ -50,12 +50,12 @@ class Pipeline:
         self.episodic = episodic
         self.semantic = semantic
         self.backend = backend
-    
+
     async def run(self, code: str, error: str, language: str = "python") -> tuple[PipelineTrace, str]:
         stages: list[str] = []
         episode_id = new_episode_id()
 
-        # Triage runs once — category doesn't change across iterations
+        # 1. Triage — runs once, category won't change across retries
         stages.append("triage")
         triage_result = await self.triage.classify(code, error)
         if triage_result.tokens_in or triage_result.tokens_out:
@@ -64,41 +64,47 @@ class Pipeline:
                 triage_result.tokens_in,
                 triage_result.tokens_out,
             )
+        log.info("triage: category=%s conf=%.2f",
+                 triage_result.category.value, triage_result.confidence)
 
-        # Retrieval runs once — same past fixes apply to all iterations
+        # 2. Retrieve — runs once, same past fixes apply to all iterations
         stages.append("retrieve")
         examples = self.semantic.retrieve(
             error=error, code=code, category=triage_result.category.value, k=3,
         )
+        log.info("retrieved %d examples from semantic memory", len(examples))
 
-        # Route once — bandit picks a model
+        # 3. Route — bandit picks a specialist model, sticks with it across iterations
         decision = self.router.route(error, code, triage_result.category.value)
         fixer = FixerAgent(decision.provider)
 
-        # ITERATION LOOP
-        attempt_history: list[dict] = []  # accumulates failures for the LLM to see
+        # ── ITERATION LOOP ──────────────────────────────────────────
+        attempt_history: list[dict] = []
         fix = None
         critic_verdict = None
         execution = None
         verdict = None
         total_in = triage_result.tokens_in
         total_out = triage_result.tokens_out
+        successful_iteration = 0
 
-        for iteration in range(MAX_ITERATIONS):
-            stages.append(f"specialist_iter{iteration + 1}")
+        for iteration in range(self.MAX_ITERATIONS):
+            iter_num = iteration + 1
+            log.info("── ITERATION %d/%d ──", iter_num, self.MAX_ITERATIONS)
 
-            # Build the prompt with failure history from previous iterations
-            enhanced_error = self._build_error_with_history(error, attempt_history)
+            effective_error = self._build_error_with_history(error, attempt_history)
 
-            fix = await fixer.fix(
-                code, enhanced_error, language, triage_result.category, examples,
-            )
+            stages.append(f"specialist_iter{iter_num}")
+            fix = await fixer.fix(code, effective_error, language, triage_result.category, examples)
             self.budget.record(fix.model, fix.tokens_in, fix.tokens_out)
             total_in += fix.tokens_in
             total_out += fix.tokens_out
+            log.info("specialist iter%d: model=%s conf=%.2f", iter_num, fix.model, fix.confidence)
 
-            stages.append(f"critic_iter{iteration + 1}")
-            critic_verdict = await self.critic.review(code, fix.fixed_code, fix.explanation, error)
+            stages.append(f"critic_iter{iter_num}")
+            critic_verdict = await self.critic.review(
+                code, fix.fixed_code, fix.explanation, error,
+            )
             self.budget.record(
                 self.critic.provider.model,
                 critic_verdict.tokens_in,
@@ -113,7 +119,7 @@ class Pipeline:
 
             execution = None
             if critic_verdict.approved and language == "python" and _looks_runnable(final_code):
-                stages.append(f"execute_iter{iteration + 1}")
+                stages.append(f"execute_iter{iter_num}")
                 raw = await self.executor.run_python(final_code)
                 execution = ExecutionResult(
                     ran=True,
@@ -124,30 +130,33 @@ class Pipeline:
                     timed_out=raw["timed_out"],
                 )
 
-            stages.append(f"judge_iter{iteration + 1}")
+            stages.append(f"judge_iter{iter_num}")
             verdict = self.judge.decide(critic_verdict, execution)
+            log.info("judge iter%d: success=%s reason=%s",
+                     iter_num, verdict.success, verdict.reason)
 
             if verdict.success:
-                log.info("succeeded on iteration %d", iteration + 1)
+                successful_iteration = iter_num
+                log.info("succeeded on iteration %d", iter_num)
                 break
 
             if not verdict.should_retry:
-                log.info("judge says don't retry; stopping")
+                log.info("judge says don't retry; giving up")
                 break
 
-            # Record the failure so next iteration sees it
-            failure_info = {
-                "iteration": iteration + 1,
-                "attempted_fix": fix.fixed_code[:500],
+            failure = {
+                "iteration": iter_num,
+                "attempted_fix": fix.fixed_code[:600],
                 "why_failed": verdict.reason,
             }
             if execution and execution.stderr:
-                failure_info["execution_stderr"] = execution.stderr[:500]
+                failure["execution_stderr"] = execution.stderr[:500]
             if critic_verdict.issues:
-                failure_info["critic_issues"] = critic_verdict.issues
-            attempt_history.append(failure_info)
+                failure["critic_issues"] = critic_verdict.issues
+            attempt_history.append(failure)
 
-            log.info("iteration %d failed: %s. Retrying.", iteration + 1, verdict.reason)
+            log.info("iteration %d failed; retrying with failure context", iter_num)
+        # ── END LOOP ────────────────────────────────────────────────
 
         trace = PipelineTrace(
             category=triage_result.category,
@@ -185,8 +194,12 @@ class Pipeline:
         )
         self.episodic.record(ep)
 
-        initial_reward = 1.0 if verdict.success else 0.0
-        self.router.record_outcome(triage_result.category.value, fix.model, initial_reward)
+        # Bandit reward: rewards decay for later iterations to encourage first-shot success
+        if verdict.success:
+            reward = {1: 1.0, 2: 0.7, 3: 0.5}.get(successful_iteration, 0.4)
+        else:
+            reward = 0.0
+        self.router.record_outcome(triage_result.category.value, fix.model, reward)
 
         if self.backend and self.backend.enabled:
             asyncio.create_task(self.backend.upload_episode(ep, upload_code=False))
@@ -194,7 +207,7 @@ class Pipeline:
         return trace, episode_id
 
     def _build_error_with_history(self, original_error: str, history: list[dict]) -> str:
-        """Prepend previous failed attempts so the specialist sees what didn't work."""
+        """Prepend prior failed attempts so the specialist doesn't repeat them."""
         if not history:
             return original_error
 
@@ -202,15 +215,20 @@ class Pipeline:
             "Original error:",
             original_error,
             "",
-            "Previous fix attempts that FAILED:",
+            "=" * 60,
+            "PREVIOUS FIX ATTEMPTS THAT FAILED:",
+            "=" * 60,
         ]
         for h in history:
-            parts.append(f"\nAttempt {h['iteration']}:")
-            parts.append(f"  Fix tried: {h['attempted_fix']}")
-            parts.append(f"  Why it failed: {h['why_failed']}")
+            parts.append(f"\n-- Attempt {h['iteration']} --")
+            parts.append(f"Fix tried:\n{h['attempted_fix']}")
+            parts.append(f"Why it failed: {h['why_failed']}")
             if "execution_stderr" in h:
-                parts.append(f"  Runtime error: {h['execution_stderr']}")
+                parts.append(f"Runtime error:\n{h['execution_stderr']}")
             if "critic_issues" in h:
-                parts.append(f"  Critic flagged: {', '.join(h['critic_issues'])}")
-        parts.append("\nDo NOT repeat these mistakes. Try a different approach.")
+                parts.append(f"Critic issues: {', '.join(h['critic_issues'])}")
+
+        parts.append("\n" + "=" * 60)
+        parts.append("Do NOT repeat these mistakes. Try a fundamentally different approach.")
+        parts.append("=" * 60)
         return "\n".join(parts)
