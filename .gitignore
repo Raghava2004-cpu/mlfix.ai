@@ -21,3 +21,18 @@ Thumbs.db
 
 # IDE
 .vscode-test/
+
+# AWS installers / logs
+AWSCLIV2*.msi
+AWSCLIV2*.log
+*.log
+
+# AWS CLI invocation outputs
+response.json
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
