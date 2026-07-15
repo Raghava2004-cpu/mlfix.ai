@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 load_dotenv()
+from .providers.groq_provider import GroqProvider
 
 from .agents.pipeline import Pipeline
 from .backend.client import BackendClient
@@ -58,10 +59,20 @@ def create_pipeline() -> tuple[
     # Backend is optional - disabled cleanly if env vars are not set.
     backend = BackendClient()
 
-    easy = GeminiProvider(model="gemini-2.5-flash-lite")
-    medium = GeminiProvider(model="gemini-2.5-flash")
-    hard = GeminiProvider(model="gemini-2.5-flash")
-
+    # Groq for the workhorse (14k free req/day) with Gemini as backup
+    try:
+        groq_easy = GroqProvider(model="llama-3.1-8b-instant")
+        groq_hard = GroqProvider(model="llama-3.3-70b-versatile")
+        easy = groq_easy
+        medium = groq_hard
+        hard = groq_hard
+        log.info("using Groq providers (llama-3.1-8b-instant + llama-3.3-70b-versatile)")
+    except RuntimeError:
+        # Fall back to Gemini if Groq key is missing
+        log.warning("Groq unavailable, falling back to Gemini")
+        easy = GeminiProvider(model="gemini-2.5-flash-lite")
+        medium = GeminiProvider(model="gemini-2.5-flash")
+        hard = GeminiProvider(model="gemini-2.5-flash")
     router = Router(easy, medium, hard, budget=budget, bandit=bandit)
     executor = LocalExecutor(timeout_s=8.0)
 

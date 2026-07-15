@@ -24,10 +24,15 @@ log = logging.getLogger("mlfix.pipeline")
 
 
 def _looks_runnable(code: str) -> bool:
+    """Skip execution only for code that clearly can't run in a plain sandbox."""
     lowered = code.lower()
-    hazards = ["open(", "requests.", "urllib", "socket.", "torch.load(", "wandb.", "cuda"]
+    # These substrings indicate the code needs external files/network/GPU
+    hazards = [
+        "requests.get(", "requests.post(", "urllib.request",
+        "socket.socket", "torch.load(", "wandb.init(",
+        "torch.cuda", ".cuda(", "cuda.is_available",
+    ]
     return not any(h in lowered for h in hazards)
-
 
 class Pipeline:
     MAX_ITERATIONS = 3
@@ -141,7 +146,8 @@ class Pipeline:
                 fix.fixed_code = critic_verdict.revised_code
 
             execution = None
-            if critic_verdict.approved and language == "python" and _looks_runnable(final_code):
+            execution = None
+            if language == "python" and _looks_runnable(final_code):
                 stages.append(f"execute_iter{iter_num}")
                 raw = await self.executor.run_python(final_code)
                 execution = ExecutionResult(

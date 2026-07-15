@@ -12,6 +12,14 @@ class JudgeAgent:
         critic: CriticVerdict,
         execution: ExecutionResult | None,
     ) -> JudgeVerdict:
+        # Execution is the strongest signal — if it ran and passed, trust it.
+        if execution is not None and not execution.timed_out and execution.exit_code == 0:
+            return JudgeVerdict(
+                success=True,
+                reason="execution exited 0",
+                should_retry=False,
+            )
+
         if not critic.approved:
             return JudgeVerdict(
                 success=False,
@@ -20,7 +28,6 @@ class JudgeAgent:
             )
 
         if execution is None:
-            # No execution attempted (e.g. non-runnable snippet). Trust critic.
             return JudgeVerdict(
                 success=True,
                 reason="critic approved (no execution performed)",
@@ -31,13 +38,6 @@ class JudgeAgent:
             return JudgeVerdict(
                 success=False,
                 reason="execution timed out",
-                should_retry=False,
-            )
-
-        if execution.exit_code == 0:
-            return JudgeVerdict(
-                success=True,
-                reason="execution exited 0",
                 should_retry=False,
             )
 
