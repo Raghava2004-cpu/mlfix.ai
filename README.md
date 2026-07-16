@@ -101,6 +101,25 @@ Fixes are executed in a sandboxed subprocess with a timeout. If it doesn't run, 
 <br />
 
 ---
+## When to use mlfix
+
+mlfix is **not** a faster Copilot. It's a verified fixer for cases where
+correctness matters more than latency.
+
+| Use case | Best tool |
+|---|---|
+| Interactive "fix this typo" while typing | Copilot / Cursor / plain LLM |
+| PR review, CI pipeline, overnight debugging | mlfix |
+| Silent ML bugs (wrong output, no crash) | mlfix |
+| Multi-file bugs where fix needs another file | mlfix |
+| Learning system that improves per team over time | mlfix |
+
+Every mlfix fix is executed in a sandbox before shipping. See
+[benchmark/](./benchmark/) for numbers vs plain-LLM baselines.
+
+**Benchmark headline:** on 5 curated hard bugs, mlfix and plain Llama 70B both
+scored 5/5 external correctness — but mlfix verified 5/5 while baseline verified 0/5.
+
 
 ## 🏗️ Architecture
 
